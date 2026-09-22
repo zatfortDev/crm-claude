@@ -523,7 +523,7 @@ npm run db:generate && npm run db:migrate && npm run db:seed
 
 | Entorno | Comando | Notas |
 |---|---|---|
-| Desarrollo | `npm run db:migrate -- --name <descripcion>` (= `prisma migrate dev`) | Genera SQL en `prisma/migrations/<timestamp>_<nombre>/migration.sql`. **Revisar y completar** el SQL con CHECK/índices filtrados cuando aplique antes de confirmar |
+| Desarrollo | `npm run db:migrate -- --name <descripcion>` (= `prisma migrate dev`) | Genera SQL en `prisma/migrations/<timestamp>_<nombre>/migration.sql`. **Revisar y completar** el SQL con CHECK/índices filtrados cuando aplique antes de confirmar. Verificado en la migración inicial: los objetos añadidos a mano **no producen drift** (`migrate dev --create-only` genera una migración vacía) |
 | Crear SQL sin aplicar | `prisma migrate dev --create-only` | Para editar el SQL manualmente y luego `migrate dev` |
 | Test / CI | `prisma migrate deploy` sobre `crm_test` | En `globalSetup` de Vitest |
 | Producción | `prisma migrate deploy` | Nunca `migrate dev` ni `db push` |
