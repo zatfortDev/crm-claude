@@ -4,7 +4,7 @@ CRM profesional para gestionar el proceso comercial de una empresa: empresas y c
 clientes, leads, pipeline de oportunidades (tabla y Kanban), actividades, notas, historial,
 dashboard, reportes, notificaciones y configuración, con roles y permisos extensibles.
 
-> Estado: **Fase 3.1 — Setup** completada (backend base, frontend base, Prisma + SQL Server, migración inicial y seed). La implementación avanza por fases
+> Estado: **Fase 3.2 — Autenticación, usuarios y roles** completada. La implementación avanza por fases
 > (ver [Roadmap](#roadmap)). Este README se actualiza en cada fase.
 
 ## Tabla de contenidos
@@ -219,7 +219,7 @@ Migraciones en producción solo con `prisma migrate deploy`. Checklist de salida
 | 1. Análisis | — | ✅ |
 | 2. Especificación (docs) | `main` | ✅ |
 | 3.1 Setup: workspaces, Express, React, Prisma, migración inicial, seed | `feature/project-setup` | ✅ |
-| 3.2 Autenticación, usuarios, roles y permisos | `feature/authentication` | ⏳ |
+| 3.2 Autenticación, usuarios, roles y permisos | `feature/authentication` | ✅ |
 | 3.3 Empresas y contactos | `feature/companies-contacts` | ⏳ |
 | 3.4 Clientes | `feature/clients` | ⏳ |
 | 3.5 Leads y conversión | `feature/leads` | ⏳ |

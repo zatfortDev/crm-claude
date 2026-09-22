@@ -108,6 +108,19 @@
 - `DataTable`: skeleton, vacío, error con reintento, paginación.
 - `KanbanBoard`: mover tarjeta llama al endpoint de etapa; a perdida abre diálogo de motivo; rollback en error.
 
+## 5.11 Estado actual de la suite
+
+| Área | Archivo | Tests |
+|---|---|---|
+| Autenticación | `server/tests/integration/auth.test.js` | 23 |
+| Usuarios, roles y autorización | `server/tests/integration/users.test.js` | 25 |
+| Base de datos y restricciones | `server/tests/integration/database.test.js` | 5 |
+| App base (middlewares, errores, CORS) | `server/tests/integration/app.test.js` | 6 |
+| Unitarios backend | `server/tests/unit/*` | 13 |
+| Frontend (login, rutas protegidas, layout, botón) | `client/tests/*` | 12 |
+
+Total: **72 tests** en verde al cierre de la fase 3.2.
+
 ## 6. Cobertura
 
 - Umbral en CI: **80 %** de líneas/ramas en `server/src/services` y `server/src/middleware`.
