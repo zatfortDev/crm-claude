@@ -5,6 +5,7 @@ export default defineConfig({
     environment: 'node',
     include: ['tests/**/*.test.js'],
     setupFiles: ['tests/setup/env.js'],
+    globalSetup: ['tests/setup/globalSetup.js'],
     // Los tests de integración comparten la base crm_test: se ejecutan en serie.
     fileParallelism: false,
     testTimeout: 20_000,

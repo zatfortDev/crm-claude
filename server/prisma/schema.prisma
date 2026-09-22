@@ -205,7 +205,7 @@ model Client {
   status           String    @default("ACTIVE") @db.NVarChar(20) // CHECK: 'ACTIVE' | 'INACTIVE' | 'CHURNED'
   ownerId          Int?
   segment          String?   @db.NVarChar(50)
-  clientSince      DateTime  @default(dbgenerated("CAST(SYSUTCDATETIME() AS DATE)")) @db.Date
+  clientSince      DateTime  @default(dbgenerated("CONVERT([date],sysutcdatetime())")) @db.Date
   summary          String?   @db.NVarChar(Max)
   createdById      Int
   createdAt        DateTime  @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
