@@ -30,8 +30,12 @@
 | Índices únicos con NULL | SQL Server permite un único NULL en índice único | **Índices únicos filtrados** (`WHERE col IS NOT NULL AND deletedAt IS NULL`), añadidos editando el SQL de la migración |
 | Rutas de cascada múltiples | SQL Server rechaza FKs que generen más de una ruta `CASCADE`/`SET NULL` hacia una tabla | Todas las FKs a `User` y entre entidades de negocio usan `ON DELETE NO ACTION ON UPDATE NO ACTION` explícito; solo dependientes puros usan `CASCADE` |
 | `Restrict` | No existe en SQL Server | Se usa `NoAction` |
-| Shadow database | `prisma migrate dev` crea una base temporal | El login de desarrollo tiene `CREATE DATABASE` (sysadmin local) |
+| Shadow database | `prisma migrate dev` crea una base temporal | El login de desarrollo `crm_dev` pertenece al rol de servidor `dbcreator` |
 | Nombre de instancia | Prisma se conecta por TCP | `SQLEXPRESS` con TCP/IP habilitado y puerto fijo 1433 |
+| Driver adapter (Prisma 7) | El cliente exige `@prisma/adapter-mssql`, que usa el paquete `mssql` (tedious) y **no soporta autenticación integrada de Windows** del usuario actual | Login SQL dedicado en modo mixto (`crm_dev` en desarrollo, `crm_app` en producción). `DATABASE_URL` sigue siendo la única fuente de verdad: `src/lib/prisma.js` la traduce a la configuración del adapter |
+| Generador (Prisma 7) | `prisma-client-js` está deprecado; el generador `prisma-client` emite TypeScript | Se usa `prisma-client` con salida en `src/generated/prisma` (ignorada por Git) y se importa desde JavaScript con el *type stripping* nativo de Node ≥ 22.18 |
+| `.env` | La CLI de Prisma 7 no carga `.env` automáticamente | `prisma.config.mjs` importa `dotenv/config` |
+| `@db.DateTime2(p)` | Prisma no acepta precisión en `DateTime2` | Se usa `DATETIME2` con la precisión por defecto (7) |
 | `@db.NVarChar(n)` | Prisma por defecto usa `NVARCHAR(1000)` para `String` | Se declara la longitud explícita en cada campo |
 | Migraciones con SQL manual | CHECK, índices filtrados y collation no se expresan en `schema.prisma` | Se editan los archivos `migration.sql` antes de aplicar; Prisma no los revierte porque no introspecta esos objetos |
 
@@ -473,7 +477,21 @@ TCP/IP deshabilitado, collation del servidor `Modern_Spanish_CI_AS`.
 
 Si el firewall de Windows está activo y se accede desde otra máquina, permitir TCP 1433 (no necesario para localhost).
 
-### 8.2 Crear las bases con la collation correcta
+### 8.2 Habilitar modo mixto y crear el login de desarrollo (una sola vez)
+
+El driver de la aplicación no admite autenticación integrada de Windows (ver § 1.1), por lo que
+se usa un login SQL. Con una sesión de Windows con permisos de administrador de la instancia:
+
+```bash
+# Modo mixto (SQL Server y Windows). Requiere reiniciar el servicio (el mismo reinicio de § 8.1).
+sqlcmd -S "localhost\SQLEXPRESS" -E -Q "EXEC xp_instance_regwrite N'HKEY_LOCAL_MACHINE', N'Software\Microsoft\MSSQLServer\MSSQLServer', N'LoginMode', REG_DWORD, 2"
+
+# Login de desarrollo. Elegí una contraseña propia; solo va en server/.env.
+# dbcreator es necesario para la shadow database de `prisma migrate dev`.
+sqlcmd -S "localhost\SQLEXPRESS" -E -Q "CREATE LOGIN crm_dev WITH PASSWORD = 'TU_CONTRASEÑA', CHECK_POLICY = OFF; ALTER SERVER ROLE dbcreator ADD MEMBER crm_dev;"
+```
+
+### 8.3 Crear las bases con la collation correcta
 
 Prisma crearía la base con la collation del servidor (sensible a acentos); por eso se crean antes:
 
@@ -482,21 +500,30 @@ CREATE DATABASE crm_dev  COLLATE Modern_Spanish_100_CI_AI;
 CREATE DATABASE crm_test COLLATE Modern_Spanish_100_CI_AI;
 ```
 
-(`server/scripts/create-databases.sql`, ejecutable con `npm run db:create`).
+`server/scripts/create-databases.sql` (ejecutable con `npm run db:create`) crea ambas bases y da
+`db_owner` en ellas al login `crm_dev`.
 
-### 8.3 Cadena de conexión
+### 8.4 Cadena de conexión
 
 ```
-sqlserver://localhost:1433;database=crm_dev;integratedSecurity=true;encrypt=true;trustServerCertificate=true
+sqlserver://localhost:1433;database=crm_dev;user=crm_dev;password=TU_CONTRASEÑA;encrypt=true;trustServerCertificate=true
 ```
 
+Si la contraseña contiene `;` o `=`, envolverla entre llaves: `password={p;ss=w}`.
 En producción: login SQL dedicado con permisos mínimos y certificado válido (`trustServerCertificate=false`).
+
+### 8.5 Verificación
+
+```bash
+sqlcmd -S tcp:localhost,1433 -U crm_dev -Q "SELECT DB_NAME(), SUSER_SNAME()"   # pide la contraseña
+npm run db:generate && npm run db:migrate && npm run db:seed
+```
 
 ## 9. Flujo de migraciones
 
 | Entorno | Comando | Notas |
 |---|---|---|
-| Desarrollo | `npm run db:migrate -- --name <descripcion>` (= `prisma migrate dev`) | Genera SQL en `prisma/migrations/<timestamp>_<nombre>/migration.sql`. **Revisar y completar** el SQL con CHECK/índices filtrados cuando aplique antes de confirmar |
+| Desarrollo | `npm run db:migrate -- --name <descripcion>` (= `prisma migrate dev`) | Genera SQL en `prisma/migrations/<timestamp>_<nombre>/migration.sql`. **Revisar y completar** el SQL con CHECK/índices filtrados cuando aplique antes de confirmar. Verificado en la migración inicial: los objetos añadidos a mano **no producen drift** (`migrate dev --create-only` genera una migración vacía) |
 | Crear SQL sin aplicar | `prisma migrate dev --create-only` | Para editar el SQL manualmente y luego `migrate dev` |
 | Test / CI | `prisma migrate deploy` sobre `crm_test` | En `globalSetup` de Vitest |
 | Producción | `prisma migrate deploy` | Nunca `migrate dev` ni `db push` |

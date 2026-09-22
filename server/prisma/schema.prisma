@@ -1,0 +1,465 @@
+// Esquema de datos del CRM — Microsoft SQL Server
+// Referencia completa (tipos, índices, restricciones y reglas): docs/database.md
+//
+// Notas específicas de SQL Server + Prisma:
+// - Los "enums" (estados, tipos) se modelan como NVarChar + CHECK constraint en la migración,
+//   ya que el conector SQL Server no soporta enums nativos. Los valores válidos viven en
+//   src/models/constants.js y se validan con Zod.
+// - Todas las FKs hacia User y entre entidades de negocio usan NoAction para evitar el error
+//   "multiple cascade paths" de SQL Server. El borrado de negocio es lógico (deletedAt).
+// - Los índices únicos sobre columnas nullables (Contact.email, Company.taxId, Client.companyId)
+//   se convierten en índices únicos FILTRADOS editando el SQL de la migración.
+// - Las fechas se almacenan en UTC (DATETIME2). createdAt usa SYSUTCDATETIME() en la base.
+
+generator client {
+  provider            = "prisma-client"
+  output              = "../src/generated/prisma"
+  moduleFormat        = "esm"
+  importFileExtension = "ts"
+}
+
+datasource db {
+  provider = "sqlserver"
+}
+
+// ---------------------------------------------------------------------------
+// Seguridad y usuarios
+// ---------------------------------------------------------------------------
+
+model Role {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique(map: "UX_Role_name") @db.NVarChar(50)
+  description String?  @db.NVarChar(255)
+  isSystem    Boolean  @default(false)
+  createdAt   DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  updatedAt   DateTime @updatedAt @db.DateTime2
+
+  users       User[]
+  permissions RolePermission[]
+}
+
+model Permission {
+  id          Int     @id @default(autoincrement())
+  code        String  @unique(map: "UX_Permission_code") @db.NVarChar(100)
+  module      String  @db.NVarChar(50)
+  description String? @db.NVarChar(255)
+
+  roles RolePermission[]
+
+  @@index([module], map: "IX_Permission_module")
+}
+
+model RolePermission {
+  roleId       Int
+  permissionId Int
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([roleId, permissionId])
+  @@index([permissionId], map: "IX_RolePermission_permissionId")
+}
+
+model User {
+  id                  Int       @id @default(autoincrement())
+  email               String    @unique(map: "UX_User_email") @db.NVarChar(255)
+  passwordHash        String    @db.NVarChar(255)
+  firstName           String    @db.NVarChar(100)
+  lastName            String    @db.NVarChar(100)
+  phone               String?   @db.NVarChar(30)
+  roleId              Int
+  managerId           Int?
+  isActive            Boolean   @default(true)
+  mustChangePassword  Boolean   @default(false)
+  failedLoginAttempts Int       @default(0)
+  lockedUntil         DateTime? @db.DateTime2
+  lastLoginAt         DateTime? @db.DateTime2
+  createdAt           DateTime  @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  updatedAt           DateTime  @updatedAt @db.DateTime2
+
+  role    Role   @relation(fields: [roleId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  manager User?  @relation("UserManager", fields: [managerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  reports User[] @relation("UserManager")
+
+  refreshTokens RefreshToken[]
+  notifications Notification[]
+  auditLogs     AuditLog[]
+  settings      Setting[]
+
+  createdCompanies     Company[]                 @relation("CompanyCreatedBy")
+  createdContacts      Contact[]                 @relation("ContactCreatedBy")
+  ownedClients         Client[]                  @relation("ClientOwner")
+  createdClients       Client[]                  @relation("ClientCreatedBy")
+  ownedLeads           Lead[]                    @relation("LeadOwner")
+  createdLeads         Lead[]                    @relation("LeadCreatedBy")
+  ownedOpportunities   Opportunity[]             @relation("OpportunityOwner")
+  createdOpportunities Opportunity[]             @relation("OpportunityCreatedBy")
+  ownedActivities      Activity[]                @relation("ActivityOwner")
+  createdActivities    Activity[]                @relation("ActivityCreatedBy")
+  notes                Note[]
+  stageChanges         OpportunityStageHistory[]
+
+  @@index([roleId], map: "IX_User_roleId")
+  @@index([managerId], map: "IX_User_managerId")
+  @@index([isActive], map: "IX_User_isActive")
+}
+
+model RefreshToken {
+  id           Int       @id @default(autoincrement())
+  userId       Int
+  tokenHash    String    @unique(map: "UX_RefreshToken_tokenHash") @db.NVarChar(128)
+  expiresAt    DateTime  @db.DateTime2
+  revokedAt    DateTime? @db.DateTime2
+  replacedById Int?
+  userAgent    String?   @db.NVarChar(255)
+  ipAddress    String?   @db.NVarChar(45)
+  createdAt    DateTime  @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+
+  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  replacedBy RefreshToken?  @relation("TokenRotation", fields: [replacedById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  replaces   RefreshToken[] @relation("TokenRotation")
+
+  @@index([userId], map: "IX_RefreshToken_userId")
+  @@index([expiresAt], map: "IX_RefreshToken_expiresAt")
+}
+
+// ---------------------------------------------------------------------------
+// Directorio
+// ---------------------------------------------------------------------------
+
+model Company {
+  id             Int       @id @default(autoincrement())
+  name           String    @db.NVarChar(200)
+  legalName      String?   @db.NVarChar(200)
+  // Único filtrado: WHERE taxId IS NOT NULL AND deletedAt IS NULL (ver migración)
+  taxId          String?   @unique(map: "FX_Company_taxId") @db.NVarChar(50)
+  industry       String?   @db.NVarChar(100)
+  website        String?   @db.NVarChar(255)
+  email          String?   @db.NVarChar(255)
+  phone          String?   @db.NVarChar(30)
+  addressLine    String?   @db.NVarChar(255)
+  city           String?   @db.NVarChar(100)
+  state          String?   @db.NVarChar(100)
+  country        String?   @db.NVarChar(100)
+  postalCode     String?   @db.NVarChar(20)
+  employeesRange String?   @db.NVarChar(20) // CHECK: '1-10','11-50','51-200','201-500','501-1000','1000+'
+  description    String?   @db.NVarChar(Max)
+  createdById    Int
+  createdAt      DateTime  @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  updatedAt      DateTime  @updatedAt @db.DateTime2
+  deletedAt      DateTime? @db.DateTime2
+
+  createdBy  User       @relation("CompanyCreatedBy", fields: [createdById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  contacts   Contact[]
+  client     Client?
+  leads      Lead[]
+  activities Activity[]
+  notes      Note[]
+
+  @@index([name], map: "IX_Company_name")
+  @@index([industry], map: "IX_Company_industry")
+  @@index([city], map: "IX_Company_city")
+  @@index([deletedAt], map: "IX_Company_deletedAt")
+}
+
+model Contact {
+  id          Int       @id @default(autoincrement())
+  firstName   String    @db.NVarChar(100)
+  lastName    String    @db.NVarChar(100)
+  // Único filtrado: WHERE email IS NOT NULL AND deletedAt IS NULL (ver migración)
+  email       String?   @unique(map: "FX_Contact_email") @db.NVarChar(255)
+  phone       String?   @db.NVarChar(30)
+  mobile      String?   @db.NVarChar(30)
+  jobTitle    String?   @db.NVarChar(100)
+  department  String?   @db.NVarChar(100)
+  companyId   Int?
+  isPrimary   Boolean   @default(false)
+  linkedinUrl String?   @db.NVarChar(255)
+  createdById Int
+  createdAt   DateTime  @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  updatedAt   DateTime  @updatedAt @db.DateTime2
+  deletedAt   DateTime? @db.DateTime2
+
+  company       Company?      @relation(fields: [companyId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  createdBy     User          @relation("ContactCreatedBy", fields: [createdById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  primaryOf     Client[]
+  opportunities Opportunity[]
+  convertedFrom Lead[]        @relation("LeadConvertedContact")
+  activities    Activity[]
+  notes         Note[]
+
+  @@index([companyId], map: "IX_Contact_companyId")
+  @@index([lastName, firstName], map: "IX_Contact_lastName_firstName")
+}
+
+// ---------------------------------------------------------------------------
+// Comercial
+// ---------------------------------------------------------------------------
+
+model Client {
+  id               Int       @id @default(autoincrement())
+  type             String    @db.NVarChar(20) // CHECK: 'COMPANY' | 'INDIVIDUAL'
+  // Único filtrado: WHERE companyId IS NOT NULL AND deletedAt IS NULL (ver migración)
+  companyId        Int?      @unique(map: "FX_Client_companyId")
+  primaryContactId Int?
+  status           String    @default("ACTIVE") @db.NVarChar(20) // CHECK: 'ACTIVE' | 'INACTIVE' | 'CHURNED'
+  ownerId          Int?
+  segment          String?   @db.NVarChar(50)
+  clientSince      DateTime  @default(dbgenerated("CONVERT([date],sysutcdatetime())")) @db.Date
+  summary          String?   @db.NVarChar(Max)
+  createdById      Int
+  createdAt        DateTime  @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  updatedAt        DateTime  @updatedAt @db.DateTime2
+  deletedAt        DateTime? @db.DateTime2
+
+  company        Company?      @relation(fields: [companyId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  primaryContact Contact?      @relation(fields: [primaryContactId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  owner          User?         @relation("ClientOwner", fields: [ownerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  createdBy      User          @relation("ClientCreatedBy", fields: [createdById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  opportunities  Opportunity[]
+  convertedFrom  Lead[]        @relation("LeadConvertedClient")
+  activities     Activity[]
+  notes          Note[]
+
+  @@index([primaryContactId], map: "IX_Client_primaryContactId")
+  @@index([ownerId, status], map: "IX_Client_ownerId_status")
+}
+
+model LeadSource {
+  id        Int     @id @default(autoincrement())
+  name      String  @unique(map: "UX_LeadSource_name") @db.NVarChar(100)
+  isActive  Boolean @default(true)
+  sortOrder Int     @default(0)
+
+  leads Lead[]
+}
+
+model Lead {
+  id                     Int       @id @default(autoincrement())
+  firstName              String    @db.NVarChar(100)
+  lastName               String    @db.NVarChar(100)
+  email                  String?   @db.NVarChar(255)
+  phone                  String?   @db.NVarChar(30)
+  companyName            String?   @db.NVarChar(200)
+  companyId              Int?
+  jobTitle               String?   @db.NVarChar(100)
+  sourceId               Int?
+  status                 String    @default("NEW") @db.NVarChar(20) // CHECK: NEW, CONTACTED, QUALIFIED, UNQUALIFIED, CONVERTED, LOST
+  ownerId                Int?
+  estimatedValue         Decimal?  @db.Decimal(18, 2)
+  description            String?   @db.NVarChar(Max)
+  lostReason             String?   @db.NVarChar(500)
+  convertedAt            DateTime? @db.DateTime2
+  convertedClientId      Int?
+  convertedContactId     Int?
+  convertedOpportunityId Int?
+  createdById            Int
+  createdAt              DateTime  @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  updatedAt              DateTime  @updatedAt @db.DateTime2
+  deletedAt              DateTime? @db.DateTime2
+
+  company              Company?     @relation(fields: [companyId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  source               LeadSource?  @relation(fields: [sourceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  owner                User?        @relation("LeadOwner", fields: [ownerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  createdBy            User         @relation("LeadCreatedBy", fields: [createdById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  convertedClient      Client?      @relation("LeadConvertedClient", fields: [convertedClientId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  convertedContact     Contact?     @relation("LeadConvertedContact", fields: [convertedContactId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  convertedOpportunity Opportunity? @relation("LeadConvertedOpportunity", fields: [convertedOpportunityId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  activities           Activity[]
+  notes                Note[]
+
+  @@index([email], map: "IX_Lead_email")
+  @@index([companyId], map: "IX_Lead_companyId")
+  @@index([sourceId], map: "IX_Lead_sourceId")
+  @@index([status, ownerId], map: "IX_Lead_status_ownerId")
+  @@index([createdAt], map: "IX_Lead_createdAt")
+}
+
+model PipelineStage {
+  id                 Int      @id @default(autoincrement())
+  name               String   @unique(map: "UX_PipelineStage_name") @db.NVarChar(100)
+  sortOrder          Int
+  defaultProbability Int // CHECK: 0..100
+  isWon              Boolean  @default(false)
+  isLost             Boolean  @default(false) // CHECK: NOT (isWon AND isLost)
+  isActive           Boolean  @default(true)
+  color              String?  @db.NVarChar(20)
+  createdAt          DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  updatedAt          DateTime @updatedAt @db.DateTime2
+
+  opportunities Opportunity[]
+  historyFrom   OpportunityStageHistory[] @relation("StageHistoryFrom")
+  historyTo     OpportunityStageHistory[] @relation("StageHistoryTo")
+}
+
+model Opportunity {
+  id                Int       @id @default(autoincrement())
+  name              String    @db.NVarChar(200)
+  clientId          Int
+  contactId         Int?
+  stageId           Int
+  ownerId           Int
+  amount            Decimal   @default(0) @db.Decimal(18, 2) // CHECK: >= 0
+  currency          String    @default("USD") @db.Char(3)
+  probability       Int // CHECK: 0..100
+  expectedCloseDate DateTime? @db.Date
+  actualCloseDate   DateTime? @db.Date
+  description       String?   @db.NVarChar(Max)
+  lostReason        String?   @db.NVarChar(500)
+  createdById       Int
+  createdAt         DateTime  @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  updatedAt         DateTime  @updatedAt @db.DateTime2
+  deletedAt         DateTime? @db.DateTime2
+
+  client        Client                    @relation(fields: [clientId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  contact       Contact?                  @relation(fields: [contactId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  stage         PipelineStage             @relation(fields: [stageId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  owner         User                      @relation("OpportunityOwner", fields: [ownerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  createdBy     User                      @relation("OpportunityCreatedBy", fields: [createdById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  stageHistory  OpportunityStageHistory[]
+  convertedFrom Lead[]                    @relation("LeadConvertedOpportunity")
+  activities    Activity[]
+  notes         Note[]
+
+  @@index([clientId], map: "IX_Opportunity_clientId")
+  @@index([contactId], map: "IX_Opportunity_contactId")
+  @@index([ownerId, stageId], map: "IX_Opportunity_ownerId_stageId")
+  @@index([stageId, expectedCloseDate], map: "IX_Opportunity_stageId_expectedCloseDate")
+  @@index([actualCloseDate], map: "IX_Opportunity_actualCloseDate")
+}
+
+model OpportunityStageHistory {
+  id            Int      @id @default(autoincrement())
+  opportunityId Int
+  fromStageId   Int?
+  toStageId     Int
+  changedById   Int
+  changedAt     DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  note          String?  @db.NVarChar(500)
+
+  opportunity Opportunity    @relation(fields: [opportunityId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  fromStage   PipelineStage? @relation("StageHistoryFrom", fields: [fromStageId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  toStage     PipelineStage  @relation("StageHistoryTo", fields: [toStageId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  changedBy   User           @relation(fields: [changedById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([opportunityId, changedAt], map: "IX_OpportunityStageHistory_opportunityId_changedAt")
+}
+
+// ---------------------------------------------------------------------------
+// Seguimiento
+// ---------------------------------------------------------------------------
+
+model Activity {
+  id              Int       @id @default(autoincrement())
+  type            String    @db.NVarChar(20) // CHECK: CALL, EMAIL, MEETING, TASK, FOLLOW_UP
+  subject         String    @db.NVarChar(200)
+  description     String?   @db.NVarChar(Max)
+  status          String    @default("PENDING") @db.NVarChar(20) // CHECK: PENDING, IN_PROGRESS, COMPLETED, CANCELLED
+  priority        String    @default("MEDIUM") @db.NVarChar(10) // CHECK: LOW, MEDIUM, HIGH
+  scheduledAt     DateTime? @db.DateTime2
+  dueDate         DateTime? @db.DateTime2
+  completedAt     DateTime? @db.DateTime2
+  durationMinutes Int? // CHECK: >= 0
+  outcome         String?   @db.NVarChar(500)
+  ownerId         Int
+  createdById     Int
+  companyId       Int?
+  contactId       Int?
+  clientId        Int?
+  leadId          Int?
+  opportunityId   Int?
+  createdAt       DateTime  @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  updatedAt       DateTime  @updatedAt @db.DateTime2
+
+  owner       User         @relation("ActivityOwner", fields: [ownerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  createdBy   User         @relation("ActivityCreatedBy", fields: [createdById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  company     Company?     @relation(fields: [companyId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  contact     Contact?     @relation(fields: [contactId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  client      Client?      @relation(fields: [clientId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  lead        Lead?        @relation(fields: [leadId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  opportunity Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  // FX_Activity_open_dueDate (dueDate) WHERE status IN ('PENDING','IN_PROGRESS') — se añade en la migración
+
+  @@index([type], map: "IX_Activity_type")
+  @@index([companyId], map: "IX_Activity_companyId")
+  @@index([contactId], map: "IX_Activity_contactId")
+  @@index([clientId], map: "IX_Activity_clientId")
+  @@index([leadId], map: "IX_Activity_leadId")
+  @@index([opportunityId], map: "IX_Activity_opportunityId")
+  @@index([ownerId, status, dueDate], map: "IX_Activity_ownerId_status_dueDate")
+}
+
+model Note {
+  id            Int      @id @default(autoincrement())
+  content       String   @db.NVarChar(Max)
+  authorId      Int
+  companyId     Int?
+  contactId     Int?
+  clientId      Int?
+  leadId        Int?
+  opportunityId Int?
+  isPinned      Boolean  @default(false)
+  createdAt     DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  updatedAt     DateTime @updatedAt @db.DateTime2
+
+  author      User         @relation(fields: [authorId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  company     Company?     @relation(fields: [companyId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  contact     Contact?     @relation(fields: [contactId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  client      Client?      @relation(fields: [clientId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  lead        Lead?        @relation(fields: [leadId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  opportunity Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  // CK_Note_single_parent: exactamente una FK no nula — se añade en la migración.
+  // Los índices por FK se crean filtrados (WHERE col IS NOT NULL) en la migración.
+  @@index([companyId], map: "FX_Note_companyId")
+  @@index([contactId], map: "FX_Note_contactId")
+  @@index([clientId], map: "FX_Note_clientId")
+  @@index([leadId], map: "FX_Note_leadId")
+  @@index([opportunityId], map: "FX_Note_opportunityId")
+}
+
+// ---------------------------------------------------------------------------
+// Sistema
+// ---------------------------------------------------------------------------
+
+model AuditLog {
+  id         BigInt   @id @default(autoincrement())
+  entityType String   @db.NVarChar(50)
+  entityId   Int
+  action     String   @db.NVarChar(30) // CHECK: ver docs/database.md
+  changes    String?  @db.NVarChar(Max) // JSON { before, after } — CHECK ISJSON
+  userId     Int?
+  ipAddress  String?  @db.NVarChar(45)
+  createdAt  DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+
+  user User? @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([entityType, entityId, createdAt(sort: Desc)], map: "IX_AuditLog_entity")
+  @@index([userId, createdAt(sort: Desc)], map: "IX_AuditLog_userId_createdAt")
+}
+
+model Notification {
+  id         Int       @id @default(autoincrement())
+  userId     Int
+  type       String    @db.NVarChar(50)
+  title      String    @db.NVarChar(200)
+  message    String?   @db.NVarChar(500)
+  entityType String?   @db.NVarChar(50)
+  entityId   Int?
+  isRead     Boolean   @default(false)
+  readAt     DateTime? @db.DateTime2
+  createdAt  DateTime  @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([userId, isRead, createdAt(sort: Desc)], map: "IX_Notification_userId_isRead_createdAt")
+}
+
+model Setting {
+  key         String   @id @db.NVarChar(100)
+  value       String   @db.NVarChar(Max)
+  updatedById Int?
+  updatedAt   DateTime @updatedAt @db.DateTime2
+
+  updatedBy User? @relation(fields: [updatedById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}

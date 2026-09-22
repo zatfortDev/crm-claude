@@ -6,8 +6,8 @@
 
 | Entorno | Base de datos | Autenticación DB | Frontend | Backend |
 |---|---|---|---|---|
-| Desarrollo | `crm_dev` en `SQLEXPRESS` local (TCP 1433) | Windows integrada | Vite dev server `:5173` | `node --watch` `:4000` |
-| Test | `crm_test` | Windows integrada (local) / login SQL (CI) | — | Vitest |
+| Desarrollo | `crm_dev` en `SQLEXPRESS` local (TCP 1433) | Login SQL `crm_dev` (modo mixto) | Vite dev server `:5173` | `node --watch` `:4000` |
+| Test | `crm_test` | Login SQL `crm_dev` (local) / `sa` del contenedor (CI) | — | Vitest |
 | Staging / Producción | SQL Server 2019+ o Azure SQL | Login SQL dedicado, TLS válido | Build estático servido por nginx | Node 22 en contenedor o PM2 |
 
 ## 2. Topología recomendada (producción)
@@ -53,7 +53,7 @@ Formato de `DATABASE_URL`:
 
 ```
 sqlserver://HOST:1433;database=NOMBRE;user=USUARIO;password=CONTRASEÑA;encrypt=true;trustServerCertificate=false
-sqlserver://localhost:1433;database=crm_dev;integratedSecurity=true;encrypt=true;trustServerCertificate=true   (dev Windows)
+sqlserver://localhost:1433;database=crm_dev;user=crm_dev;password=CONTRASEÑA;encrypt=true;trustServerCertificate=true   (desarrollo local)
 ```
 
 Si la contraseña contiene `;` o `=`, envolverla entre llaves: `password={p;ss=w}`.

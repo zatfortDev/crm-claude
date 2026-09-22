@@ -230,7 +230,7 @@ Notación: **RF-XX-NN**. Cada requisito tiene criterios de aceptación verificab
 | Disponibilidad | Endpoint `/health`; arranque falla rápido si falta configuración; apagado ordenado (graceful shutdown). |
 | Mantenibilidad | Separación en capas; validación con esquemas; componentes UI reutilizables; docs actualizadas por fase; ESLint + Prettier. |
 | Observabilidad | Logs JSON estructurados con `requestId`; sin datos sensibles. |
-| Compatibilidad | Node ≥ 22, SQL Server ≥ 2019 (probado en 2022 Express), navegadores evergreen. |
+| Compatibilidad | Node ≥ 22.18, SQL Server ≥ 2019 (probado en 2022 Express), navegadores evergreen. |
 | Internacionalización | UI en español; fechas en UTC en base y formateadas según configuración; identificadores en inglés. |
 | Accesibilidad | Navegación por teclado en formularios y Kanban; contraste AA; estados de carga/vacío/error explícitos. |
 | Responsive | Usable desde 360 px (sidebar colapsable; tablas con scroll horizontal; Kanban con scroll horizontal). |
@@ -287,7 +287,8 @@ La conversión se permite desde NEW, CONTACTED o QUALIFIED.
 | D-10 | `PipelineStage` y `LeadSource` configurables en tablas; estados de lead y tipos de actividad como constantes | Todo hardcodeado; todo configurable | 2026-09-21 |
 | D-11 | Access token JWT en memoria (15 min) + refresh token opaco rotativo en cookie httpOnly (7 días) | JWT único de larga vida en localStorage | 2026-09-21 |
 | D-12 | PK `INT IDENTITY`; `NVARCHAR`; `DATETIME2` en UTC; collation de base `Modern_Spanish_100_CI_AI` | GUID como PK; collation del servidor (`Modern_Spanish_CI_AS`) | 2026-09-21 |
-| D-13 | Desarrollo local con autenticación integrada de Windows contra `SQLEXPRESS` por TCP 1433 | Login SQL en modo mixto | 2026-09-21 |
+| D-13 | Desarrollo local con **login SQL dedicado (`crm_dev`) en modo mixto** contra `SQLEXPRESS` por TCP 1433. Motivo: el driver adapter de Prisma 7 (`@prisma/adapter-mssql`/tedious) no soporta autenticación integrada de Windows del usuario actual | Windows integrada (imposible en runtime con Prisma 7); NTLM con contraseña de Windows en .env; Prisma 6 | 2026-09-21 |
+| D-14 | Prisma 7 con generador `prisma-client` (salida TypeScript en `server/src/generated/prisma`) importado desde JavaScript mediante el *type stripping* nativo de Node ≥ 22.18 | `prisma-client-js` (deprecado en Prisma 7) | 2026-09-21 |
 
 ## 8. Glosario
 
