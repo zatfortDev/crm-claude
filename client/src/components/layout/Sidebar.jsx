@@ -9,27 +9,36 @@ import {
   CalendarCheck,
   BarChart3,
   Settings,
+  ShieldCheck,
   X,
 } from 'lucide-react';
 import { APP_NAME } from '../../lib/constants.js';
 import { cn } from '../../lib/utils.js';
+import { useAuth } from '../../context/AuthContext.jsx';
 
+/** Navegación principal. Cada entrada declara el permiso que la habilita. */
 export const NAV_ITEMS = [
-  { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { to: '/companies', label: 'Empresas', icon: Building2 },
-  { to: '/contacts', label: 'Contactos', icon: Users },
-  { to: '/clients', label: 'Clientes', icon: UserCircle },
-  { to: '/leads', label: 'Leads', icon: Target },
-  { to: '/opportunities', label: 'Oportunidades', icon: Briefcase },
-  { to: '/activities', label: 'Actividades', icon: CalendarCheck },
-  { to: '/reports', label: 'Reportes', icon: BarChart3 },
-  { to: '/settings', label: 'Configuración', icon: Settings },
+  { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, permission: 'dashboard:view' },
+  { to: '/companies', label: 'Empresas', icon: Building2, permission: 'companies:read' },
+  { to: '/contacts', label: 'Contactos', icon: Users, permission: 'contacts:read' },
+  { to: '/clients', label: 'Clientes', icon: UserCircle, permission: 'clients:read' },
+  { to: '/leads', label: 'Leads', icon: Target, permission: 'leads:read' },
+  {
+    to: '/opportunities',
+    label: 'Oportunidades',
+    icon: Briefcase,
+    permission: 'opportunities:read',
+  },
+  { to: '/activities', label: 'Actividades', icon: CalendarCheck, permission: 'activities:read' },
+  { to: '/reports', label: 'Reportes', icon: BarChart3, permission: 'reports:view' },
+  { to: '/users', label: 'Usuarios', icon: ShieldCheck, permission: 'users:read' },
+  { to: '/settings', label: 'Configuración', icon: Settings, permission: 'settings:read' },
 ];
 
-function NavItems({ onNavigate }) {
+function NavItems({ items, onNavigate }) {
   return (
-    <nav className="flex flex-1 flex-col gap-1 px-3" aria-label="Principal">
-      {NAV_ITEMS.map(({ to, label, icon: Icon }) => (
+    <nav className="flex flex-1 flex-col gap-1 px-3 pb-4" aria-label="Principal">
+      {items.map(({ to, label, icon: Icon }) => (
         <NavLink
           key={to}
           to={to}
@@ -63,12 +72,15 @@ function Brand() {
 }
 
 export function Sidebar({ mobileOpen, onClose }) {
+  const { hasPermission } = useAuth();
+  const items = NAV_ITEMS.filter((item) => !item.permission || hasPermission(item.permission));
+
   return (
     <>
       {/* Escritorio */}
       <aside className="hidden w-64 shrink-0 flex-col bg-sidebar lg:flex">
         <Brand />
-        <NavItems />
+        <NavItems items={items} />
       </aside>
 
       {/* Móvil */}
@@ -87,7 +99,7 @@ export function Sidebar({ mobileOpen, onClose }) {
                 <X className="size-5" />
               </button>
             </div>
-            <NavItems onNavigate={onClose} />
+            <NavItems items={items} onNavigate={onClose} />
           </aside>
         </div>
       )}

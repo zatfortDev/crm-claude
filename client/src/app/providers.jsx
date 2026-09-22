@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'sonner';
+import { AuthProvider } from '../context/AuthContext.jsx';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -19,8 +20,10 @@ const queryClient = new QueryClient({
 export function AppProviders({ children }) {
   return (
     <QueryClientProvider client={queryClient}>
-      {children}
-      <Toaster position="top-right" richColors closeButton />
+      <AuthProvider>
+        {children}
+        <Toaster position="top-right" richColors closeButton />
+      </AuthProvider>
     </QueryClientProvider>
   );
 }
