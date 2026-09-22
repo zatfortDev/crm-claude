@@ -32,6 +32,12 @@ export default [
     },
   },
 
+  // Scripts de Prisma (seed) usan console para informar progreso
+  {
+    files: ['server/prisma/**/*.js', 'server/scripts/**/*.js'],
+    rules: { 'no-console': 'off' },
+  },
+
   // Tests backend
   {
     files: ['server/tests/**/*.js'],
