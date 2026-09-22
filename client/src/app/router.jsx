@@ -6,6 +6,10 @@ import { ChangePasswordPage } from '../features/auth/pages/ChangePasswordPage.js
 import { ProfilePage } from '../features/auth/pages/ProfilePage.jsx';
 import { DashboardPage } from '../features/dashboard/pages/DashboardPage.jsx';
 import { UsersPage } from '../features/users/pages/UsersPage.jsx';
+import { CompaniesPage } from '../features/companies/pages/CompaniesPage.jsx';
+import { CompanyDetailPage } from '../features/companies/pages/CompanyDetailPage.jsx';
+import { ContactsPage } from '../features/contacts/pages/ContactsPage.jsx';
+import { ContactDetailPage } from '../features/contacts/pages/ContactDetailPage.jsx';
 import { NotFoundPage } from '../components/common/NotFoundPage.jsx';
 
 // Las rutas de cada módulo se añaden en su fase (docs/architecture.md § 4.2).
@@ -33,6 +37,38 @@ export const routes = [
         element: (
           <ProtectedRoute permission="dashboard:view">
             <DashboardPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'companies',
+        element: (
+          <ProtectedRoute permission="companies:read">
+            <CompaniesPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'companies/:id',
+        element: (
+          <ProtectedRoute permission="companies:read">
+            <CompanyDetailPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'contacts',
+        element: (
+          <ProtectedRoute permission="contacts:read">
+            <ContactsPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'contacts/:id',
+        element: (
+          <ProtectedRoute permission="contacts:read">
+            <ContactDetailPage />
           </ProtectedRoute>
         ),
       },

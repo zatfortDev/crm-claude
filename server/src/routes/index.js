@@ -5,6 +5,9 @@ import { Router } from 'express';
 import { authRouter } from './auth.routes.js';
 import { usersRouter } from './users.routes.js';
 import { rolesRouter, permissionsRouter } from './roles.routes.js';
+import { companiesRouter } from './companies.routes.js';
+import { contactsRouter } from './contacts.routes.js';
+import { notesRouter } from './notes.routes.js';
 import { authenticate, requireFreshPassword } from '../middleware/authenticate.js';
 
 export const apiRouter = Router();
@@ -22,3 +25,6 @@ const secured = [authenticate, requireFreshPassword];
 apiRouter.use('/users', secured, usersRouter);
 apiRouter.use('/roles', secured, rolesRouter);
 apiRouter.use('/permissions', secured, permissionsRouter);
+apiRouter.use('/companies', secured, companiesRouter);
+apiRouter.use('/contacts', secured, contactsRouter);
+apiRouter.use('/notes', secured, notesRouter);

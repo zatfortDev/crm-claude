@@ -114,12 +114,13 @@
 |---|---|---|
 | Autenticación | `server/tests/integration/auth.test.js` | 23 |
 | Usuarios, roles y autorización | `server/tests/integration/users.test.js` | 25 |
+| Empresas, contactos, notas y timeline | `server/tests/integration/companies.test.js` | 30 |
 | Base de datos y restricciones | `server/tests/integration/database.test.js` | 5 |
 | App base (middlewares, errores, CORS) | `server/tests/integration/app.test.js` | 6 |
 | Unitarios backend | `server/tests/unit/*` | 13 |
-| Frontend (login, rutas protegidas, layout, botón) | `client/tests/*` | 12 |
+| Frontend (login, rutas protegidas, layout, listados y detalles) | `client/tests/*` | 22 |
 
-Total: **72 tests** en verde al cierre de la fase 3.2.
+Total: **124 tests** en verde al cierre de la fase 3.3 (102 backend + 22 frontend).
 
 ## 6. Cobertura
 

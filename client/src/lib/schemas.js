@@ -50,3 +50,37 @@ export const profileSchema = z.object({
   lastName: z.string().trim().min(1, 'El apellido es obligatorio').max(100),
   phone: z.string().trim().max(30).optional().or(z.literal('')),
 });
+
+const optionalString = (max) => z.string().trim().max(max).optional().or(z.literal(''));
+
+export const EMPLOYEES_RANGES = ['1-10', '11-50', '51-200', '201-500', '501-1000', '1000+'];
+
+export const companySchema = z.object({
+  name: z.string().trim().min(1, 'El nombre es obligatorio').max(200),
+  legalName: optionalString(200),
+  taxId: optionalString(50),
+  industry: optionalString(100),
+  website: z.string().trim().url('URL inválida').max(255).optional().or(z.literal('')),
+  email: z.string().trim().email('Email inválido').max(255).optional().or(z.literal('')),
+  phone: optionalString(30),
+  addressLine: optionalString(255),
+  city: optionalString(100),
+  state: optionalString(100),
+  country: optionalString(100),
+  postalCode: optionalString(20),
+  employeesRange: z.enum(EMPLOYEES_RANGES).optional().or(z.literal('')),
+  description: optionalString(4000),
+});
+
+export const contactSchema = z.object({
+  firstName: z.string().trim().min(1, 'El nombre es obligatorio').max(100),
+  lastName: z.string().trim().min(1, 'El apellido es obligatorio').max(100),
+  email: z.string().trim().email('Email inválido').max(255).optional().or(z.literal('')),
+  phone: optionalString(30),
+  mobile: optionalString(30),
+  jobTitle: optionalString(100),
+  department: optionalString(100),
+  linkedinUrl: optionalString(255),
+  companyId: z.union([z.coerce.number().int().positive(), z.literal('')]).optional(),
+  isPrimary: z.boolean().optional(),
+});
