@@ -4,7 +4,7 @@ CRM profesional para gestionar el proceso comercial de una empresa: empresas y c
 clientes, leads, pipeline de oportunidades (tabla y Kanban), actividades, notas, historial,
 dashboard, reportes, notificaciones y configuración, con roles y permisos extensibles.
 
-> Estado: **Fase 2 — Especificación** completada. La implementación avanza por fases
+> Estado: **Fase 3.1 — Setup** en curso. La implementación avanza por fases
 > (ver [Roadmap](#roadmap)). Este README se actualiza en cada fase.
 
 ## Tabla de contenidos
@@ -53,7 +53,7 @@ Detalle: [docs/architecture.md](docs/architecture.md).
 
 ## Requisitos
 
-- Node.js ≥ 22 y npm ≥ 10
+- Node.js ≥ 22.18 (usa el *type stripping* nativo para el cliente Prisma generado) y npm ≥ 10
 - Git
 - Microsoft SQL Server 2019+ (Express es suficiente) con **TCP/IP habilitado** en el puerto 1433
 - Windows: `sqlcmd` (incluido con SQL Server) para los scripts de creación de bases
@@ -105,22 +105,30 @@ Variables documentadas en [docs/deployment.md § 3](docs/deployment.md#3-variabl
 
 ## SQL Server
 
-### Desarrollo local (Windows, autenticación integrada)
+### Desarrollo local (SQL Server Express)
+
+La aplicación se conecta con un **login SQL** (el driver de Prisma 7 no soporta autenticación
+integrada de Windows). Pasos, una sola vez:
 
 1. Habilitar **TCP/IP** en *SQL Server Configuration Manager → Protocolos de SQLEXPRESS*, fijar
-   **Puerto TCP = 1433** en `IPAll` (puertos dinámicos vacío) y reiniciar el servicio.
-2. Crear las bases con la collation del proyecto:
+   **Puerto TCP = 1433** en `IPAll` (puertos dinámicos vacío).
+2. Habilitar **modo mixto** y crear el login de desarrollo (elegí tu contraseña):
+
+   ```bash
+   sqlcmd -S "localhost\SQLEXPRESS" -E -Q "EXEC xp_instance_regwrite N'HKEY_LOCAL_MACHINE', N'Software\Microsoft\MSSQLServer\MSSQLServer', N'LoginMode', REG_DWORD, 2"
+   sqlcmd -S "localhost\SQLEXPRESS" -E -Q "CREATE LOGIN crm_dev WITH PASSWORD = 'TU_CONTRASEÑA', CHECK_POLICY = OFF; ALTER SERVER ROLE dbcreator ADD MEMBER crm_dev;"
+   ```
+
+3. Reiniciar el servicio **SQL Server (SQLEXPRESS)**.
+4. Crear las bases con la collation del proyecto y dar acceso al login:
 
    ```bash
    npm run db:create
    ```
 
    (ejecuta `server/scripts/create-databases.sql`: `crm_dev` y `crm_test` con `Modern_Spanish_100_CI_AI`).
-3. `DATABASE_URL="sqlserver://localhost:1433;database=crm_dev;integratedSecurity=true;encrypt=true;trustServerCertificate=true"`
-
-### Login SQL (modo mixto)
-
-`DATABASE_URL="sqlserver://HOST:1433;database=crm_dev;user=USUARIO;password=CONTRASEÑA;encrypt=true;trustServerCertificate=true"`
+5. En `server/.env`:
+   `DATABASE_URL="sqlserver://localhost:1433;database=crm_dev;user=crm_dev;password=TU_CONTRASEÑA;encrypt=true;trustServerCertificate=true"`
 
 Guía completa: [docs/database.md § 8](docs/database.md#8-preparación-de-sql-server-desarrollo-local).
 
